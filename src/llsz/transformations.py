@@ -1,7 +1,7 @@
 import numpy as np
 from dask_image import ndinterp
 from gputools.transforms import affine as affineGPU
-
+import pyclesperanto_prototype as cle
 
 def deskew_affine_matrix(deskew_factor:float=1.7321,skew_dir:str="Y",reverse:bool=False):
     """Take deskew factor and skew direction and return coresponding affine matrix
@@ -174,7 +174,7 @@ def translate_Y_matrix(translation, reverse:bool=False):
                 ])
     return translate_mat
     
-def deskew_zeiss(vol,angle:float=30.0,shear_factor:float=1.7321,scale_factor:float=0,translation:float=0,skew_dir:str="Y",reverse:bool=False,dask:bool=False):
+def deskew_zeiss(vol,angle:float=30.0,shear_factor:float=1.7321,scale_factor:float=0,translation:float=0,skew_dir:str="Y",reverse:bool=False,dask:bool=False, tile_size:int=64):
     """Performs Scaling, Deskew, Rotation and Translation of the raw data from Zeiss lattice and returns a processed image
 
     Args:
@@ -213,6 +213,25 @@ def deskew_zeiss(vol,angle:float=30.0,shear_factor:float=1.7321,scale_factor:flo
         #rotate_coverslip=deskew.map_blocks(ndimage.rotate, angle=angle, axes=rotate_axes,dtype=vol.dtype)
         deskewed_vol=deskewed_vol.rechunk(vol.shape)
     else:
-        deskewed_vol = affineGPU(vol, np.linalg.inv(deskew_rotation_mat),output_shape=vol.shape,mode="constant")
+        if tile_size > 0:
+            deskewed_vol = np.zeros(vol.shape)
+            deskewed_sub_volume = None
+            num_tiles = int(deskewed_vol.shape[2] / tile_size)
+            for i in range(num_tiles):
+                # todo: take care of the last stripe if the image width cannot be divided by tile_size
+                print("Processing", i, num_tiles)
+                sub_volume = vol[:, :,i*tile_size:(i+1)*tile_size]
+
+                print("sub_volume shape", sub_volume.shape)
+
+                deskewed_sub_volume = cle.affine_transform(
+                    sub_volume,
+                    deskewed_sub_volume, # reuse memory after the first call
+                    transform=np.linalg.inv(deskew_rotation_mat),
+                    linear_interpolation=True
+                )
+                deskewed_vol[:, :, i * tile_size : (i + 1) * tile_size] = np.asarray(deskewed_sub_volume)
+        else:
+            deskewed_vol = affineGPU(vol, np.linalg.inv(deskew_rotation_mat),output_shape=vol.shape,mode="constant")
         #scipy deskewed_vol = affine_transform(vol, n
     return deskewed_vol #img_as_uint(processed)
