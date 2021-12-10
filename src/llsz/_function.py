@@ -58,8 +58,11 @@ def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, kee
 
     # from https://github.com/SpimCat/unsweep/blob/6592b2667bda304336360e099ac015654a87787a/src/main/java/net/haesleinhuepf/spimcat/unsweep/Unsweep.java#L45
     import math
-    deskew_factor = 1.0 / math.tan(rotation_angle * math.pi / 180)
-
+    try:
+        deskew_factor = 1.0 / math.tan(rotation_angle * math.pi / 180)
+    except ZeroDivisionError:
+        deskew_factor = 0
+        
     deskew_transform = cle.AffineTransform3D()
     # shearing
     shear_mat = np.array([
