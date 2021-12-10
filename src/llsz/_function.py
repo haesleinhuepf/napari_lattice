@@ -80,5 +80,5 @@ def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, kee
     import time
     start_time = time.time()
     result = _affine_transform(raw_image, at=deskew_transform)
-    print("Deskew took", time.time() - start_time, "s")
+    print("Deskew took", time.time() - start_time, "s on", cle.get_device())
     return result
