@@ -7,4 +7,4 @@ __version__ = "0.0.1"
 from llsz.ui import napari_experimental_provide_dock_widget
 #from llsz.ui_widget_test import napari_experimental_provide_dock_widget
 
-#from ._function import napari_experimental_provide_function
+from ._function import napari_experimental_provide_function
