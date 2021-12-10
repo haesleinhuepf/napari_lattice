@@ -51,7 +51,7 @@ def _affine_transform(source, at: cle.AffineTransform3D = None):
 
 @register_function(menu="Transform > Deskew in Y (llsz)")
 @time_slicer
-def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, viewer:"napari.Viewer"=None) -> "napari.types.ImageData":
+def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, keep_orientation:bool = False, viewer:"napari.Viewer"=None) -> "napari.types.ImageData":
     """
     Deskew an image stack.
     """
@@ -71,7 +71,14 @@ def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, vie
     deskew_transform._concatenate(shear_mat)
 
     # rotation
-    deskew_transform.rotate(angle_in_degrees=90 - rotation_angle, axis=0)
+    delta = 0
+    if keep_orientation:
+        delta = 90
+    deskew_transform.rotate(angle_in_degrees=delta-rotation_angle, axis=0)
 
     # apply transform
-    return _affine_transform(raw_image, at=deskew_transform)
+    import time
+    start_time = time.time()
+    result = _affine_transform(raw_image, at=deskew_transform)
+    print("Deskew took", time.time() - start_time, "s")
+    return result
