@@ -31,24 +31,30 @@ To install latest development version :
 
     pip install git+https://github.com/pr4deepr/llsz_napari.git@napari_plugin
 
-and for the GUI:
 
-    pip install git+https://github.com/hanjinliu/magic-class.git
-
+#### [**Sample data for testing**](https://cloudstor.aarnet.edu.au/plus/s/700eD6EcgOODovI) 
+***Credit: Cindy Evelyn & Niall Geoghegan, Walter and Eliza Hall Institute of Medical Research, Melbourne, Australia***
 
 Once installed, just start napari as normal and the plugin should be under "Plugins" tab
 
 Functions:
 * Open a czi lattice file
 * Preview deskewing on any time or channel
+* Preview cropping on any time or channel
 * Save deskewed stack for time and channel range of interest
+* Save cropped stack for time and channel range of interest
 
-![image](https://user-images.githubusercontent.com/13831458/140601278-4bd7e754-b1b6-438f-98d2-5d40ace29853.png)
+![image](/resources/LLSZ_window.png)
 
 
 To do:
-* Add cropping
-* Clean up UI
+* Clean up UI (Menu options?)
+* Add pyclesperanto as backend for transformations
+* Implement image analysis workflow option
+* Include deconvolution
+* Add batch processing option (no napari -> magic-class or magicgui only)
+* Document functions consistently
+
 
 ## Contributing
 

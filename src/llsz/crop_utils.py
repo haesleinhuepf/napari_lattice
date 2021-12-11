@@ -22,6 +22,27 @@ import itertools
 #one function for taking a list of ROIs and passing to the above function?
 
 def crop_deskew_roi(crop_roi,vol_shape,vol,angle,dx_y,dz,z_start,z_end,time,channel,skew_dir,reverse=True):
+    """Crops the ROI volume based on a 2D bounding box from napari and the starting and ending Z slices
+    Args:
+        crop_roi ([type]): ROI coordinates as bounding box (2D)
+        vol_shape (tuple,np.array): Shape of final volume around which rotation performed (z,y,x,1)
+        vol (da.array, np.array): Original raw data to be deskewed
+        angle (float): Lattice angle
+        dx_y (float): pixel dimensions in x or y (usually the same)
+        dz (float): pixel dimensions in y
+        z_start (int): [description]
+        z_end (int): [description]
+        time (int): [description]
+        channel (int): [description]
+        skew_dir (str): Direction of skew (microscope property)
+        reverse (bool, optional): As we are cropping from original volume, set to True. Defaults to True.
+
+    Raises:
+        ValueError: [description]
+
+    Returns:
+        np.array: Cropped ROI volume
+    """    
     #vol will be just  dask volume, pass channel, time
 
     #Get 3D shape of the ROI
@@ -46,17 +67,23 @@ def crop_deskew_roi(crop_roi,vol_shape,vol,angle,dx_y,dz,z_start,z_end,time,chan
     roi_shape, roi_coord=get_roi_3D_shape_coord(crop_roi,z_start,z_end)
     print("ROI shape in reference image", roi_shape)
     
+    #if x coordinate origin has negative values, make it 0 (BBox coordinate could be outside image bounds) 
+    if roi_coord[2][0]<0:
+        roi_coord = np.array(roi_coord)
+        roi_coord[2][0]=0
+
     #transform the roi using the deskew shape as we are going from deskew volume to original volume 
     #reverse=True
     new_roi=get_transformed_roi_coord(vol_shape_deskew,roi_coord,angle,dx_y,dz,translate_y,skew_dir=skew_dir,reverse=reverse) #reverse=True
     raw_vol_shape=get_roi_3D_shape(new_roi)
     print("Transformed ROI coordinates in raw volume",new_roi)
 
-    #check coordinates are >0 
+    #check coordinates are greater than 0 
     new_rois_flatten=list(itertools.chain.from_iterable(new_roi))
     if not all([r>=0 for r in new_rois_flatten]):
-        raise ValueError("New ROI for cropping: Coordinates should not have negative values.")
+        raise ValueError("Cropping ROI coordinates should not be negative.")
 
+    
     #As the shape changes after deskewing, we take the maximum across all dimensions ensuring that nothing gets clipped
     max_roi_shape=get_roi_skew_shape(raw_vol_shape,roi_shape,angle,dx_y,dz,skew_dir=skew_dir)
     print("ROI shape that will be used in raw image to get entire volume (due to skew)", max_roi_shape)
@@ -74,14 +101,22 @@ def crop_deskew_roi(crop_roi,vol_shape,vol,angle,dx_y,dz,z_start,z_end,time,chan
     
     (z_roi_1,z_roi_2),(y_roi_1,y_roi_2),(x_roi_1,x_roi_2)=new_roi
 
+    #if ROI bounds for z are less than zero
     if z_roi_1<0: 
         #z_roi_2=z_roi_2-z_roi_1
         z_roi_2=z_roi_2+z_roi_1
         transformed_roi_depth=z_roi_2
         z_roi_1=0
 
+    #if ROI bounds for width are outside the image or dataset
+    if x_roi_1<0:
+        x_roi_2=x_roi_2+x_roi_1
+        transformed_roi_width=x_roi_2
+        x_roi_1=0
+
     #Crop from raw volume based on coordinates determined above
     crop_dask_stack=vol[time,channel,z_roi_1:z_roi_2,y_roi_1:y_roi_2,x_roi_1:x_roi_2].map_blocks(np.copy).squeeze()
+
 
     print("Shape of original volume",crop_dask_stack.shape)
     print("Transformed ROI intended shape",transformed_roi_depth,transformed_roi_height,transformed_roi_width)
@@ -94,10 +129,14 @@ def crop_deskew_roi(crop_roi,vol_shape,vol,angle,dx_y,dz,z_start,z_end,time,chan
         z_diff = max_roi_shape[0] - crop_dask_stack.shape[0] #transformed_roi_depth
         #max_roi_shape[0]=crop_dask_stack.shape[0]  
         print("Adjusting for empty array at ends of the stack")
-        print("New ROI shape extracted from raw volume:",max_roi_shape)
+        #print("New ROI shape extracted from raw volume (adjusted Z):",max_roi_shape)
     else:
         z_diff=0
 
+    #if crop ROI is not equal to width of the transformed ROI, its because bounding box (ROI) outside the image bounds
+    if(crop_dask_stack.shape[2] != transformed_roi_width):
+        transformed_roi_width = crop_dask_stack.shape[2]
+        print("Adjusting for bounding box outside the image bounds (X-axis)")
     #create empty dask array with same size as the transformed roi from above
     deskew_roi_img=da.zeros(max_roi_shape,dtype=vol.dtype,chunks=tuple(max_roi_shape))
     
@@ -110,15 +149,23 @@ def crop_deskew_roi(crop_roi,vol_shape,vol,angle,dx_y,dz,z_start,z_end,time,chan
 
     #Get the bounds for cropping
     #Transform our volume of interest within the bounds of the extended volume to get coordinates
-    crop_y_top,crop_y_bottom=get_ROI_bounds(deskew_roi.shape,raw_vol_shape,angle,dx_y,dz,translate_y,skew_dir,False)
     
+    crop_x1, crop_x2, crop_y_top,crop_y_bottom,crop_z_top,crop_z_bottom = get_ROI_bounds(deskew_roi.shape,raw_vol_shape,angle,dx_y,dz,
+                                                                            translate_y,skew_dir,False)
+    
+    #if negative, then make it zero
     if crop_y_top<0:
-        crop_y_top=0 #if negative, then make it zero
+        crop_y_top=0 
     
-    #print(crop_y_top , crop_y_bottom)
+    if crop_z_top<0:
+       crop_z_top=0  
+    
+    if crop_x1<0:
+        crop_x1=0  
 
-    #crop_y_bottom=round(crop_y_top+roi_height)+(pad*2)
-    deskew_roi=deskew_roi[:,crop_y_top:crop_y_bottom,:]
+
+    #cropping the volume so it retruns the volume within the ROI
+    deskew_roi=deskew_roi[crop_z_top:crop_z_bottom,crop_y_top:crop_y_bottom,crop_x1:crop_x2]
     return deskew_roi
 
 
@@ -261,15 +308,40 @@ def get_transformed_roi_coord(vol_shape,roi_coord,angle,dx_y,dz,translation,skew
     return (z_roi_1,z_roi_2),(y_roi_1,y_roi_2),(x_roi_1,x_roi_2)
 
 def get_ROI_bounds(deskew_roi_shape,coord,angle:float,dx_y:float,dz:float,translation:float=0,skew_dir:str="Y",reverse:bool=False):
+    """Gets the 
+
+    Args:
+        deskew_roi_shape (list): Shape of final volume around with rotation/transformation performed (z,y,x,1)
+        coord (list): Shape of the roi coordinates
+        angle (float): Angle of acquisition (Deskew angle)
+        dx_y (float): X or Y spacing (microns)
+        dz (float): Voxel spacing/distance between Z slices (microns)
+        translation (float, optional): Translations to keep final volume in bounds of the image. Defaults to 0.
+        skew_dir (float, optional): Direction of skew; Zeiss lattice is "Y", Janelia is "X". Defaults to "Y".
+        reverse (bool, optional): [Option to reverse the transformation. reverse=true can be used if going from deskewed to original volume]. Defaults to False.
+    Returns:
+        [list]: Coordinates to crop the ROI within deskewed volume as (x1,x2,y1,y2,z1,z2) 
+    """    
     """get the bounds of the roi for cropping
     deskew_roi_shape is the extended volume
     coord are coordinates within the volume which are being transformed
     output will be coord tranformed within deskew_roi_shape
     """
     deskew_coord = get_new_coordinates(deskew_roi_shape,coord,angle,dx_y,dz,translation,skew_dir,False)
-    y_top=int(deskew_coord[2][1])
-    y_bottom=int(deskew_coord[4][1])
-    return y_top,y_bottom
+    
+    #x coordinates are d
+    if skew_dir == "Y":
+        x_top=int(deskew_coord[2][2])
+        x_bottom=int(deskew_coord[3][2])
+
+        y_top=int(deskew_coord[2][1])
+        y_bottom=int(deskew_coord[4][1])
+        z_top = int(deskew_coord[2][0])
+        z_bottom = int(deskew_coord[4][0])
+    else:
+        print("Cropping for skew other than Zeiss not implemented yet")
+    
+    return x_top,x_bottom,y_top,y_bottom,z_top,z_bottom
 
 
 def get_roi_skew_shape(roi_skew_shape,roi_shape,angle,dx_y,dz,skew_dir="Y"):
@@ -292,11 +364,21 @@ def get_roi_skew_shape(roi_skew_shape,roi_shape,angle,dx_y,dz,skew_dir="Y"):
 
     if(roi_deskew_y>max_roi_shape[1]):
         max_roi_shape[1]=roi_deskew_y
+    
     print("New shape to avoid clipping during transformation", max_roi_shape)
     return max_roi_shape.astype(int)
 
 def get_roi_3D_shape_coord(roi_coord,z_min,z_max):
-    #convert rois in (x,y..); usually rois only have xy, so adding arguments for z
+    """Convert a 2D bounding box with z values to a 3D shape and also returns bounding box in 3D
+
+    Args:
+        roi_coord ([type]): [description]
+        z_min ([type]): [description]
+        z_max ([type]): [description]
+
+    Returns:
+        [tuple,tuple]: 3D shape and 3D bounding box
+    """    
     y_min,x_min=roi_coord.min(axis=0).astype(int)
     y_max,x_max=roi_coord.max(axis=0).astype(int)
     height=int(np.floor(y_max-y_min))
@@ -308,6 +390,14 @@ def get_roi_3D_shape_coord(roi_coord,z_min,z_max):
 
 #just return shape of a 3D 
 def get_roi_3D_shape(roi_coord):
+    """[summary]
+
+    Args:
+        roi_coord ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """    
     #get 3d shape if given z,y,x coord of roi takes roi:(z1,z2),(y1,y2),x1,x2
     #returns shape (depth,height,width)
     if type(roi_coord) is not np.array:
