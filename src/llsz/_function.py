@@ -47,7 +47,7 @@ def _affine_transform(source, at: cle.AffineTransform3D = None):
     )
 
     # apply transform and return result
-    return cle.affine_transform(source, destination, transform=transform_copy)
+    return cle.affine_transform(source, destination, transform=transform_copy, linear_interpolation=True)
 
 @register_function(menu="Transform > Deskew in Y (llsz)")
 @time_slicer
@@ -62,7 +62,7 @@ def deskew_y(raw_image:"napari.types.ImageData", rotation_angle: float = 30, kee
         deskew_factor = 1.0 / math.tan(rotation_angle * math.pi / 180)
     except ZeroDivisionError:
         deskew_factor = 0
-        
+
     deskew_transform = cle.AffineTransform3D()
     # shearing
     shear_mat = np.array([
