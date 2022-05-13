@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/githubuser/napari-lattice/branch/main/graph/badge.svg)](https://codecov.io/gh/githubuser/napari-lattice)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-lattice)](https://napari-hub.org/plugins/napari-lattice)
 
-A simple plugin to use with napari
+This napari plugin allows deskewing, cropping and visualisation of lattice lightsheet data from a Zeiss lattice lightsheet microscope. Support will eventually be for other oblique plane lightsheet microscopy files.
 
 ----------------------------------
 
