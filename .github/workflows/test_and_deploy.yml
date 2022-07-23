@@ -36,7 +36,8 @@ jobs:
           pip install -e .
       - name: Test
         shell: bash -l {0}
-        run: pytest -v --color=yes --cov=napari_lattice --cov-report=xml
+        # openCL tests need to be run before napari tests
+        run: pytest -v ./src/napari_lattice/_tests ./src/napari_lattice/gui/_tests --color=yes --cov=napari_lattice --cov-report=xml
       - name: Coverage
         uses: codecov/codecov-action@v1
 
